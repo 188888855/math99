@@ -1,1 +1,4 @@
-
+App({
+  onCreate() {},
+  onDestroy() {}
+})
