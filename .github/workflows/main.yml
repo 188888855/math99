@@ -16,6 +16,16 @@ jobs:
       - name: Install dependencies
         run: npm install --no-audit --no-fund
 
+      - name: Validate app.json
+        run: |
+          node -e "
+            const fs = require('fs');
+            const j = JSON.parse(fs.readFileSync('app.json', 'utf8'));
+            if (!j.app || typeof j.app !== 'object') { console.error('app.json 缺少 app 根对象'); process.exit(1); }
+            if (!j.app.appId || !j.app.appName) { console.error('app 内缺必填字段'); process.exit(1); }
+            console.log('✅ app.json 结构合法：' + j.app.appName);
+          "
+
       - name: Build .zab
         run: |
           npx zeus build
