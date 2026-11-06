@@ -1,13 +1,11 @@
 {
   "name": "equation-calculator",
   "version": "1.0.0",
-  "description": "Zepp OS 一元一次方程计算器",
-  "scripts": {
-    "build": "zeus build",
-    "preview": "zeus preview"
-  },
-  "devDependencies": {
-    "@zeppos/zeus-cli": "^1.0.0"
-  },
-  "license": "MIT"
+  "scripts": { "build": "zeus build" },
+  "devDependencies": { "@zeppos/zeus-cli": "1.1.0" },
+  "overrides": {
+    "chalk": "4.1.2",
+    "ora": "5.4.1",
+    "boxen": "5.1.2"
+  }
 }
