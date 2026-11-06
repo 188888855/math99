@@ -1,23 +1,15 @@
 {
-  "appId": 1134060,
-  "appName": "MathEngine",
-  "versionName": "1.0.0",
-  "versionCode": 1,
-  "targets": {
-    "2023": {
-      "module": {
-        "page": {
-          "pages": [
-            "page/index"
-          ]
-        }
-      }
-    }
+  "app": {
+    "appId": 1134060,
+    "appType": "app",
+    "appName": "方程计算器",
+    "version": {
+      "code": 1,
+      "name": "1.0.0"
+    },
+    "icon": "icon.png"
   },
-  "runtime": {
-    "apiVersion": {
-      "compatible": "3.0.0",
-      "target": "3.0.0"
-    }
-  }
+  "pages": [
+    "page/index"
+  ]
 }
