@@ -1,34 +1,19 @@
-name: Build Zepp OS App
+name: build-zab
 on: [push, workflow_dispatch]
 jobs:
   build:
     runs-on: ubuntu-latest
+    container:
+      image: node:16-bullseye
     steps:
       - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
-        with:
-          node-version: '20'
-      
-      - name: Install Dependencies
-        run: |
-          npm install
-          # 放弃官方难用的 cli，直接安装纯原生的 zeppos 核心库
-          npm install @zeppos/zos-ui vite --force
-          
-      - name: Build with Custom Vite
-        run: |
-          # 用 vite 直接构建，完全不依赖官方的那些烂插件
-          npx vite build --outDir dist
-          
-      - name: Package .zab (Create Zip)
-        run: |
-          # 手工把构建产物压成 zip 并改名为 .zab
-          cd dist
-          zip -r ../math_app.zab .
-          cd ..
-          
-      - name: Upload Artifact
+      - name: Install deps
+        run: npm install --no-audit --no-fund
+      - name: Build
+        run: npx zeus build
+      - name: Upload .zab
         uses: actions/upload-artifact@v4
         with:
-          name: my-app-package
-          path: math_app.zab
+          name: zab-package
+          path: '**/*.zab'
+          if-no-files-found: error
