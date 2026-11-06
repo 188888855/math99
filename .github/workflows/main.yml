@@ -13,13 +13,16 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: 打印实际 app.json
+      - name: 清理幽灵文件 + 打印真相
         run: |
-          echo "===== 实际 app.json ====="
+          rm -f page/app.js page/App.js
+          echo "===== page/ 实际内容（删完幽灵后）====="
+          ls -laR page/ 2>/dev/null || echo "(无 page 目录)"
+          echo ""
+          echo "===== 实际 app.json（vendor 到底在不在）====="
           cat app.json
-          node -e "JSON.parse(require('fs').readFileSync('app.json','utf8')); console.log('✅ 合法 JSON')"
 
-      - name: Install dependencies（切镜像，绕开 github.com 504）
+      - name: Install dependencies（镜像）
         run: |
           npm config set registry https://registry.npmmirror.com
           npm config set sharp_binary_host https://npmmirror.com/mirrors/sharp
@@ -32,22 +35,22 @@ jobs:
             const fs = require('fs');
             const j = JSON.parse(fs.readFileSync('app.json', 'utf8'));
             if (!j.app || typeof j.app !== 'object') { console.error('缺少 app 根对象'); process.exit(1); }
+            if (!j.app.vendor) { console.error('❌ app.vendor 缺失！实际 app 内容：', JSON.stringify(j.app)); process.exit(1); }
             if (!j.app.appId || !j.app.appType || !j.app.appName) { console.error('app 缺必填字段'); process.exit(1); }
-            if (!Array.isArray(j.pages) && !j.targets) { console.error('pages 或 targets 必填'); process.exit(1); }
-            console.log('✅ app.json 结构合法：' + j.app.appName);
+            console.log('✅ app.vendor =', j.app.vendor, '| appId =', j.app.appId);
           "
 
       - name: Build .zab
         run: |
           npx zeus build
           echo ""
-          echo "========== 排查1：文件树 =========="
+          echo "===== 排查1：文件树 ====="
           find . -not -path './node_modules/*' -not -path './.git/*' -type f | sort
           echo ""
-          echo "========== 排查2：.zab 定位 =========="
+          echo "===== 排查2：.zab ====="
           find . -name '*.zab' -not -path './node_modules/*' -print
           echo ""
-          echo "========== 排查3：dist =========="
+          echo "===== 排查3：dist ====="
           ls -laR dist 2>/dev/null || echo "(无 dist)"
 
       - name: 归一化产物到 dist
@@ -55,7 +58,7 @@ jobs:
           mkdir -p dist
           FOUND=$(find . -name '*.zab' -not -path './node_modules/*' | head -n 1)
           if [ -z "$FOUND" ]; then
-            echo "::error::没有找到 .zab，请看上一步日志"
+            echo "::error::没有 .zab，请看 Build 日志"
             exit 1
           fi
           echo "找到: $FOUND"
