@@ -7,6 +7,7 @@
       "code": 1,
       "name": "1.0.0"
     },
+    "icon": "icon.png",
     "vendor": "math-engine"
   },
   "targets": {
@@ -20,12 +21,7 @@
       },
       "designWidth": 480,
       "platforms": [
-        {
-          "name": "gtr4"
-        },
-        {
-          "name": "gtr3"
-        }
+        { "name": "gtr4" }
       ]
     }
   },
