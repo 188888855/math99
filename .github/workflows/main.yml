@@ -1,0 +1,19 @@
+name: Build Zepp OS App
+on: [push, workflow_dispatch]
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+      - uses: actions/setup-node@v3
+        with:
+          node-version: '18'
+      - name: Install Zeus CLI
+        run: npm i -g @zeppos/zeus-cli
+      - name: Build
+        run: zeus build
+      - name: Upload Artifact
+        uses: actions/upload-artifact@v3
+        with:
+          name: my-app-package
+          path: dist/*.zab
