@@ -6,7 +6,8 @@
     "version": {
       "code": 1,
       "name": "1.0.0"
-    }
+    },
+    "vendor": "math-engine"
   },
   "targets": {
     "2023": {
@@ -16,13 +17,26 @@
             "page/index"
           ]
         }
-      }
+      },
+      "designWidth": 480,
+      "platforms": [
+        "balance",
+        "gtr4",
+        "gtr3",
+        "gts4",
+        "gts4-mini",
+        "t-rex2"
+      ]
     }
   },
   "runtime": {
     "apiVersion": {
       "compatible": "3.0.0",
-      "target": "3.0.0"
+      "target": "3.0.0",
+      "minVersion": "3.0.0"
     }
-  }
+  },
+  "permissions": [],
+  "configVersion": "1.0.0",
+  "defaultLanguage": "zh-CN"
 }
