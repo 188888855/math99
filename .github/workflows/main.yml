@@ -13,35 +13,56 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Install dependencies
-        run: npm install --no-audit --no-fund
-
-      - name: 打印实际 app.json（排查真相）
+      - name: 打印实际 app.json
         run: |
-          echo "===== 实际 app.json 内容 ====="
+          echo "===== 实际 app.json ====="
           cat app.json
-          echo ""
-          echo "===== JSON 合法性 ====="
           node -e "JSON.parse(require('fs').readFileSync('app.json','utf8')); console.log('✅ 合法 JSON')"
+
+      - name: Install dependencies（切镜像，绕开 github.com 504）
+        run: |
+          npm config set registry https://registry.npmmirror.com
+          npm config set sharp_binary_host https://npmmirror.com/mirrors/sharp
+          npm config set sharp_libvips_binary_host https://npmmirror.com/mirrors/sharp-libvips
+          npm install --no-audit --no-fund
+
+      - name: Validate app.json
+        run: |
+          node -e "
+            const fs = require('fs');
+            const j = JSON.parse(fs.readFileSync('app.json', 'utf8'));
+            if (!j.app || typeof j.app !== 'object') { console.error('缺少 app 根对象'); process.exit(1); }
+            if (!j.app.appId || !j.app.appType || !j.app.appName) { console.error('app 缺必填字段'); process.exit(1); }
+            if (!Array.isArray(j.pages) && !j.targets) { console.error('pages 或 targets 必填'); process.exit(1); }
+            console.log('✅ app.json 结构合法：' + j.app.appName);
+          "
 
       - name: Build .zab
         run: |
           npx zeus build
-          echo "========== 排查1：项目文件树 =========="
+          echo ""
+          echo "========== 排查1：文件树 =========="
           find . -not -path './node_modules/*' -not -path './.git/*' -type f | sort
-          echo "========== 排查2：所有 .zab 文件 =========="
+          echo ""
+          echo "========== 排查2：.zab 定位 =========="
           find . -name '*.zab' -not -path './node_modules/*' -print
+          echo ""
+          echo "========== 排查3：dist =========="
+          ls -laR dist 2>/dev/null || echo "(无 dist)"
 
       - name: 归一化产物到 dist
         run: |
           mkdir -p dist
           FOUND=$(find . -name '*.zab' -not -path './node_modules/*' | head -n 1)
           if [ -z "$FOUND" ]; then
-            echo "::error::没有找到任何 .zab 文件"
+            echo "::error::没有找到 .zab，请看上一步日志"
             exit 1
           fi
-          cp "$FOUND" dist/
-          echo "---------- dist 最终内容 ----------"
+          echo "找到: $FOUND"
+          case "$FOUND" in
+            ./dist/*) echo "已在 dist" ;;
+            *) cp "$FOUND" dist/ ;;
+          esac
           ls -la dist
 
       - name: Upload .zab
