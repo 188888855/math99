@@ -1,9 +1,12 @@
 {
   "app": {
     "appId": 1134060,
+    "appType": "app",
     "appName": "MathEngine",
-    "versionName": "1.0.0",
-    "versionCode": 1
+    "version": {
+      "code": 1,
+      "name": "1.0.0"
+    }
   },
   "targets": {
     "2023": {
