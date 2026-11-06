@@ -1,0 +1,11 @@
+{
+  "name": "math99",
+  "version": "1.0.0",
+  "description": "Math watch app",
+  "scripts": {
+    "build": "zeus build"
+  },
+  "dependencies": {
+    "@zeppos/zos-ui": "^1.0.0"
+  }
+}
