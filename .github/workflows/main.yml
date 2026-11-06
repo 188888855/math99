@@ -1,19 +1,53 @@
 name: build-zab
-on: [push, workflow_dispatch]
+
+on:
+  push:
+  workflow_dispatch:
+
 jobs:
   build:
     runs-on: ubuntu-latest
     container:
       image: node:16-bullseye
     steps:
-      - uses: actions/checkout@v4
-      - name: Install deps
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install dependencies
         run: npm install --no-audit --no-fund
-      - name: Build
-        run: npx zeus build
+
+      - name: Build .zab
+        run: |
+          npx zeus build
+          echo ""
+          echo "========== 排查1：项目文件树（排除 node_modules）=========="
+          find . -not -path './node_modules/*' -not -path './.git/*' -type f | sort
+          echo ""
+          echo "========== 排查2：所有 .zab 文件 =========="
+          find . -name '*.zab' -not -path './node_modules/*' -print
+          echo ""
+          echo "========== 排查3：dist 目录 =========="
+          ls -laR dist 2>/dev/null || echo "(不存在 dist 目录)"
+
+      - name: 归一化产物到 dist
+        run: |
+          mkdir -p dist
+          FOUND=$(find . -name '*.zab' -not -path './node_modules/*' | head -n 1)
+          if [ -z "$FOUND" ]; then
+            echo "::error::没有找到任何 .zab 文件，说明 zeus build 未真正产出，请看上一步日志"
+            exit 1
+          fi
+          echo "找到 .zab: $FOUND"
+          case "$FOUND" in
+            ./dist/*) echo "已在 dist 内，无需移动" ;;
+            *) cp "$FOUND" dist/ ;;
+          esac
+          echo "---------- dist 最终内容 ----------"
+          ls -la dist
+
       - name: Upload .zab
         uses: actions/upload-artifact@v4
         with:
-          name: zab-package
-          path: '**/*.zab'
+          name: zab
+          path: dist/*.zab
           if-no-files-found: error
