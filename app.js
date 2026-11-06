@@ -1,4 +1,1 @@
-App({
-  onCreate() {},
-  onDestroy() {}
-})
+
