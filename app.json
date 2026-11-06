@@ -20,8 +20,12 @@
       },
       "designWidth": 480,
       "platforms": [
-        "gtr4",
-        "gtr3"
+        {
+          "name": "gtr4"
+        },
+        {
+          "name": "gtr3"
+        }
       ]
     }
   },
