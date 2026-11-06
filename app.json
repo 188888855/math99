@@ -20,12 +20,8 @@
       },
       "designWidth": 480,
       "platforms": [
-        "balance",
         "gtr4",
-        "gtr3",
-        "gts4",
-        "gts4-mini",
-        "t-rex2"
+        "gtr3"
       ]
     }
   },
