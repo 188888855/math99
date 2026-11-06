@@ -4,8 +4,5 @@
   "description": "Math watch app",
   "scripts": {
     "build": "zeus build"
-  },
-  "dependencies": {
-    "@zeppos/zos-ui": "^1.0.0"
   }
 }
