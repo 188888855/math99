@@ -8,10 +8,11 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: '20'
-      - name: Install Zeus CLI
-        run: npm i -g @zeppos/zeus-cli
-      - name: Build
-        run: npx zeus build
+      - name: Install and Build
+        run: |
+          npm install
+          npm i -g @zeppos/zeus-cli
+          npx zeus build
       - name: Upload Artifact
         uses: actions/upload-artifact@v4
         with:
