@@ -1,4 +1,8 @@
 {
+  "appId": 1134060,
+  "appName": "MathEngine",
+  "versionName": "1.0.0",
+  "versionCode": 1,
   "targets": {
     "2023": {
       "module": {
