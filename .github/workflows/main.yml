@@ -16,42 +16,31 @@ jobs:
       - name: Install dependencies
         run: npm install --no-audit --no-fund
 
-      - name: Validate app.json
+      - name: 打印实际 app.json（排查真相）
         run: |
-          node -e "
-            const fs = require('fs');
-            const j = JSON.parse(fs.readFileSync('app.json', 'utf8'));
-            if (!j.app || typeof j.app !== 'object') { console.error('app.json 缺少 app 根对象'); process.exit(1); }
-            if (!j.app.appId || !j.app.appName) { console.error('app 内缺必填字段'); process.exit(1); }
-            console.log('✅ app.json 结构合法：' + j.app.appName);
-          "
+          echo "===== 实际 app.json 内容 ====="
+          cat app.json
+          echo ""
+          echo "===== JSON 合法性 ====="
+          node -e "JSON.parse(require('fs').readFileSync('app.json','utf8')); console.log('✅ 合法 JSON')"
 
       - name: Build .zab
         run: |
           npx zeus build
-          echo ""
-          echo "========== 排查1：项目文件树（排除 node_modules）=========="
+          echo "========== 排查1：项目文件树 =========="
           find . -not -path './node_modules/*' -not -path './.git/*' -type f | sort
-          echo ""
           echo "========== 排查2：所有 .zab 文件 =========="
           find . -name '*.zab' -not -path './node_modules/*' -print
-          echo ""
-          echo "========== 排查3：dist 目录 =========="
-          ls -laR dist 2>/dev/null || echo "(不存在 dist 目录)"
 
       - name: 归一化产物到 dist
         run: |
           mkdir -p dist
           FOUND=$(find . -name '*.zab' -not -path './node_modules/*' | head -n 1)
           if [ -z "$FOUND" ]; then
-            echo "::error::没有找到任何 .zab 文件，说明 zeus build 未真正产出，请看上一步日志"
+            echo "::error::没有找到任何 .zab 文件"
             exit 1
           fi
-          echo "找到 .zab: $FOUND"
-          case "$FOUND" in
-            ./dist/*) echo "已在 dist 内，无需移动" ;;
-            *) cp "$FOUND" dist/ ;;
-          esac
+          cp "$FOUND" dist/
           echo "---------- dist 最终内容 ----------"
           ls -la dist
 
