@@ -1,8 +1,13 @@
 {
-  "name": "math99",
+  "name": "equation-calculator",
   "version": "1.0.0",
-  "description": "Math watch app",
+  "description": "Zepp OS 一元一次方程计算器",
   "scripts": {
-    "build": "zeus build"
-  }
+    "build": "zeus build",
+    "preview": "zeus preview"
+  },
+  "devDependencies": {
+    "@zeppos/zeus-cli": "^1.0.0"
+  },
+  "license": "MIT"
 }
