@@ -16,38 +16,60 @@ jobs:
       - name: 清理幽灵文件
         run: |
           rm -f page/app.js page/App.js
-          ls -laR page/ 2>/dev/null || echo "(无 page 目录)"
 
-      - name: 强制注入标准 app.json（无视仓库/编辑器）
+      - name: 强制注入 app.json
         run: |
           node -e '
             const fs = require("fs");
             const cfg = {
-              app: {
-                appId: 1134060,
-                appType: "app",
-                appName: "MathEngine",
-                version: { code: 1, name: "1.0.0" },
-                icon: "icon.png",
-                vendor: "math-engine"
-              },
-              targets: {
-                "2023": {
-                  module: { page: { pages: ["page/index"] } },
-                  designWidth: 480,
-                  platforms: [{ name: "gtr4" }]
-                }
-              },
+              app: { appId: 1134060, appType: "app", appName: "MathEngine",
+                     version: { code: 1, name: "1.0.0" }, icon: "icon.png", vendor: "math-engine" },
+              targets: { "2023": { module: { page: { pages: ["page/index"] } },
+                                    designWidth: 480, platforms: [{ name: "gtr4" }] } },
               runtime: { apiVersion: { compatible: "3.0.0", target: "3.0.0", minVersion: "3.0.0" } },
-              permissions: [],
-              configVersion: "1.0.0",
-              defaultLanguage: "zh-CN"
+              permissions: [], configVersion: "1.0.0", defaultLanguage: "zh-CN"
             };
             fs.writeFileSync("app.json", JSON.stringify(cfg, null, 2));
-            const j = JSON.parse(fs.readFileSync("app.json", "utf8"));
-            console.log("✅ 已强制写入，app.vendor =", j.app.vendor);
-            console.log(fs.readFileSync("app.json", "utf8"));
+            console.log("✅ app.vendor =", JSON.parse(fs.readFileSync("app.json","utf8")).app.vendor);
           '
+
+      - name: 自动生成 80x80 图标（assets/icon.png）
+        run: |
+          node -e '
+            const fs = require("fs");
+            const zlib = require("zlib");
+            function crc32(buf) {
+              let t = crc32.t;
+              if (!t) {
+                t = crc32.t = new Int32Array(256);
+                for (let n = 0; n < 256; n++) { let c = n; for (let k = 0; k < 8; k++) c = (c & 1) ? (0xEDB88320 ^ (c >>> 1)) : (c >>> 1); t[n] = c; }
+              }
+              let c = 0xFFFFFFFF;
+              for (let i = 0; i < buf.length; i++) c = t[(c ^ buf[i]) & 0xFF] ^ (c >>> 8);
+              return (c ^ 0xFFFFFFFF) >>> 0;
+            }
+            function chunk(type, data) {
+              const len = Buffer.alloc(4); len.writeUInt32BE(data.length, 0);
+              const t = Buffer.from(type, "ascii");
+              const crc = Buffer.alloc(4); crc.writeUInt32BE(crc32(Buffer.concat([t, data])), 0);
+              return Buffer.concat([len, t, data, crc]);
+            }
+            function makePng(w, h, r, g, b) {
+              const sig = Buffer.from([0x89,0x50,0x4E,0x47,0x0D,0x0A,0x1A,0x0A]);
+              const ihdr = Buffer.alloc(13);
+              ihdr.writeUInt32BE(w, 0); ihdr.writeUInt32BE(h, 4);
+              ihdr[8]=8; ihdr[9]=2; ihdr[10]=0; ihdr[11]=0; ihdr[12]=0;
+              const rowLen = 1 + w*3, raw = Buffer.alloc(h*rowLen);
+              for (let y=0;y<h;y++){ raw[y*rowLen]=0; for(let x=0;x<w;x++){ raw[y*rowLen+1+x*3]=r; raw[y*rowLen+2+x*3]=g; raw[y*rowLen+3+x*3]=b; } }
+              return Buffer.concat([sig, chunk("IHDR", ihdr), chunk("IDAT", zlib.deflateSync(raw)), chunk("IEND", Buffer.alloc(0))]);
+            }
+            fs.mkdirSync("assets", { recursive: true });
+            const png = makePng(80, 80, 0, 230, 118);
+            fs.writeFileSync("assets/icon.png", png);
+            fs.writeFileSync("icon.png", png);
+            console.log("✅ icon 已生成:", fs.statSync("assets/icon.png").size, "字节");
+          '
+          ls -laR assets/ 2>/dev/null
 
       - name: Install dependencies（镜像）
         run: |
@@ -56,24 +78,36 @@ jobs:
           npm config set sharp_libvips_binary_host https://npmmirror.com/mirrors/sharp-libvips
           npm install --no-audit --no-fund
 
-      - name: Build .zab
+      - name: Build + 全量取证（抓退出码，无产物必爆红）
         run: |
-          echo "===== 构建前的 app.json（必须含 vendor）====="
-          pwd && ls -la app.json && cat app.json
-          npx zeus --version 2>/dev/null || true
-          npx zeus build
+          echo "===== 1. zeus 二进制位置 ====="
+          ls -la node_modules/.bin/zeus 2>/dev/null || echo "❌ node_modules/.bin/zeus 不存在"
           echo ""
-          find . -not -path './node_modules/*' -not -path './.git/*' -type f | sort
+          echo "===== 2. zeus 版本 ====="
+          ./node_modules/.bin/zeus --version 2>&1 || true
+          echo ""
+          echo "===== 3. zeus build 支持的参数 ====="
+          ./node_modules/.bin/zeus build --help 2>&1 || true
+          echo ""
+          echo "===== 4. 关键文件确认 ====="
+          ls -la app.json app.js assets/icon.png page/index.js 2>&1 || true
+          echo ""
+          echo "===== 5. 执行 build（完整输出 + 退出码）====="
+          ./node_modules/.bin/zeus build 2>&1
+          ZEUS_EXIT=$?
+          echo "ZEUS_EXIT_CODE=$ZEUS_EXIT"
+          echo ""
+          echo "===== 6. 立即找 .zab ====="
           find . -name '*.zab' -not -path './node_modules/*' -print
+          if [ -z "$(find . -name '*.zab' -not -path './node_modules/*' -print -quit)" ]; then
+            echo "::error::zeus build 未产出 .zab（退出码 $ZEUS_EXIT），看上方取证输出"
+            exit 1
+          fi
 
       - name: 归一化产物到 dist
         run: |
           mkdir -p dist
           FOUND=$(find . -name '*.zab' -not -path './node_modules/*' | head -n 1)
-          if [ -z "$FOUND" ]; then
-            echo "::error::没有 .zab，请看 Build 日志"
-            exit 1
-          fi
           case "$FOUND" in
             ./dist/*) echo "已在 dist" ;;
             *) cp "$FOUND" dist/ ;;
