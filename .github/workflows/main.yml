@@ -13,7 +13,7 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: 清理幽灵文件 + 注入全机型 app.json + 生成图标
+      - name: 清理幽灵文件 + 注入双拼 app.json + 生成图标
         run: |
           rm -f page/app.js page/App.js
           node -e '
@@ -21,7 +21,9 @@ jobs:
             const names = ["gtr3","gtr4","gtr-mini","gts3","gts4","gts4-mini","t-rex2","t-rex-ultra","falcon","cheetah","cheetah-pro","balance","active","bip5"];
             const cfg = {
               app: { appId: 1134060, appType: "app", appName: "MathEngine",
-                     version: { code: 1, name: "1.0.0" }, icon: "icon.png", vendor: "math-engine" },
+                     version: { code: 1, name: "1.0.0" }, icon: "icon.png", 
+                     vendor: "math-engine", 
+                     vender: "math-engine" },
               targets: { "2023": { module: { page: { pages: ["page/index"] } },
                                     designWidth: 480, platforms: names.map(n => ({ name: n })) } },
               runtime: { apiVersion: { compatible: "3.0.0", target: "3.0.0", minVersion: "3.0.0" } },
@@ -47,52 +49,8 @@ jobs:
           npm config set sharp_libvips_binary_host https://npmmirror.com/mirrors/sharp-libvips
           npm install --no-audit --no-fund
 
-      - name: 第1击 grep 侦查
+      - name: Build (终极版)
         run: |
-          echo "===== app.json 读取位置 ====="
-          grep -rn "app\.json" node_modules/@zeppos/ --include="*.js" 2>/dev/null | grep -v "\.map$" | head -30
-          echo ""
-          echo "===== vendor 校验代码 ====="
-          grep -rn "vendor" node_modules/@zeppos/ --include="*.js" --include="*.json" 2>/dev/null | grep -v "\.map$" | head -30
-
-      - name: 第3击 patch 掉 vendor required
-        run: |
-          node -e '
-            const fs = require("fs"); const path = require("path");
-            function walk(dir, out){ out=out||[]; for(const e of fs.readdirSync(dir)){ const p=path.join(dir,e); if(fs.statSync(p).isDirectory()){ if(e!=="node_modules"&&e!==".bin") walk(p,out); } else if(e.endsWith(".js")&&!e.endsWith(".map")) out.push(p); } return out; }
-            let n=0;
-            for(const f of walk("node_modules/@zeppos")){
-              let s=fs.readFileSync(f,"utf8"); if(s.indexOf("vendor")<0) continue;
-              const next=s.replace(/required\s*:\s*\[([\s\S]*?)\]/g,(m,inner)=>{ const items=inner.split(",").map(x=>x.trim()).filter(x=>x&&x.replace(/["\x27]/g,"")!=="vendor"); return "required: ["+items.join(", ")+"]"; });
-              if(next!==s){ fs.writeFileSync(f,next); console.log("patched:",f); n++; }
-            }
-            console.log("共 patch",n,"个文件");
-          '
-
-      - name: 第2击 spy + build
-        run: |
-          cat > spy.js << 'SPYEOF'
-          const fs = require('fs');
-          const orig = fs.readFileSync;
-          fs.readFileSync = function(p) {
-            const r = orig.apply(this, arguments);
-            if (String(p).indexOf('app.json') >= 0) {
-              console.log('\n[SPY] 读取 app.json, 路径 =', p);
-              console.log('[SPY] 内容 =\n' + (r && r.toString()));
-            }
-            return r;
-          };
-          const origParse = JSON.parse;
-          JSON.parse = function(t) {
-            const r = origParse.apply(this, arguments);
-            if (r && typeof r === 'object' && r.app !== undefined) {
-              console.log('\n[SPY] app.vendor =', r.app && r.app.vendor);
-            }
-            return r;
-          };
-          console.log('[SPY] 间谍已就位');
-          SPYEOF
-          export NODE_OPTIONS="--require=$(pwd)/spy.js"
           ./node_modules/.bin/zeus build 2>&1
           echo "ZEUS_EXIT=$?"
           find . -name '*.zab' -not -path './node_modules/*' -print
