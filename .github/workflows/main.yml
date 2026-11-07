@@ -8,7 +8,7 @@ jobs:
   build:
     runs-on: ubuntu-latest
     container:
-      image: node:18-bullseye      # 关键：升级到 Node 18
+      image: node:18-bullseye      # 升级到 Node 18
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -43,20 +43,44 @@ jobs:
             fs.writeFileSync("icon.png", png);
           '
 
-      - name: Install dependencies（镜像）
-        run: |
-          npm config set registry https://registry.npmmirror.com
-          npm config set sharp_binary_host https://npmmirror.com/mirrors/sharp
-          npm config set sharp_libvips_binary_host https://npmmirror.com/mirrors/sharp-libvips
-          npm install --no-audit --no-fund
+      - name: Install dependencies（环境变量终极防弹版）
+        env:
+          npm_config_registry: https://registry.npmmirror.com
+          npm_config_sharp_binary_host: https://npmmirror.com/mirrors/sharp
+          npm_config_sharp_libvips_binary_host: https://npmmirror.com/mirrors/sharp-libvips
+        run: npm install --no-audit --no-fund
 
-      - name: Wasm 体检 + Build (终极决战)
+      - name: 终极侦查与 null-safe 补丁
+        run: |
+          echo "===== 1. screenType 前后文 ====="
+          grep -oE '.{0,150}screenType.{0,150}' node_modules/@zeppos/zpm/lib/982.node.js | head -6
+          
+          echo ""
+          echo "===== 2. 设备库真实机型代号 ====="
+          grep -oE '"(gtr[0-9a-z-]*|gts[0-9a-z-]*|t-rex[0-9a-z-]*|trex[0-9a-z-]*|falcon|cheetah[0-9a-z-]*|balance|active|bip[0-9]*)"' node_modules/@zeppos/zpm/lib/982.node.js | sort -u | head -50
+
+          echo ""
+          echo "===== 3. 应用 null-safe 补丁 ====="
+          node -e '
+            const fs = require("fs");
+            const f = "node_modules/@zeppos/zpm/lib/982.node.js";
+            let s = fs.readFileSync(f, "utf8");
+            const before = s;
+            s = s.replace(/(\{screenType:[^}]*\}=)([A-Za-z_$][\w$]*)/g, "$1($2||{})");
+            if (s !== before) {
+              fs.writeFileSync(f, s);
+              console.log("✅ 已做 null-safe 补丁");
+            } else {
+              console.log("⚠️ 没匹配到补丁位置");
+            }
+          '
+
+      - name: Build (终极决战)
         run: |
           echo "===== .wasm 文件体检 ====="
           find node_modules/@zeppos/zpm/ -name "*.wasm" -ls 2>/dev/null || echo "❌ 无 .wasm"
           echo ""
           
-          echo "===== 开始 Build ====="
           ./node_modules/.bin/zeus build 2>&1
           echo "ZEUS_EXIT=$?"
           find . -name '*.zab' -not -path './node_modules/*' -print
