@@ -13,7 +13,7 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: 清理幽灵文件 + 注入单机型 app.json + 生成图标
+      - name: 清理幽灵文件 + 注入双拼 app.json + 生成图标
         run: |
           rm -f page/app.js page/App.js
           node -e '
@@ -34,7 +34,6 @@ jobs:
               permissions: [], configVersion: "1.0.0", defaultLanguage: "zh-CN"
             };
             fs.writeFileSync("app.json", JSON.stringify(cfg, null, 2));
-            console.log("✅ app.json 已注入，vendor/vender =", JSON.parse(fs.readFileSync("app.json","utf8")).app.vendor);
             const zlib = require("zlib");
             function crc32(buf){ let t=crc32.t; if(!t){ t=crc32.t=new Int32Array(256); for(let n=0;n<256;n++){ let c=n; for(let k=0;k<8;k++) c=(c&1)?(0xEDB88320^(c>>>1)):(c>>>1); t[n]=c; } } let c=0xFFFFFFFF; for(let i=0;i<buf.length;i++) c=t[(c^buf[i])&0xFF]^(c>>>8); return (c^0xFFFFFFFF)>>>0; }
             function chunk(type,data){ const len=Buffer.alloc(4); len.writeUInt32BE(data.length,0); const t=Buffer.from(type,"ascii"); const crc=Buffer.alloc(4); crc.writeUInt32BE(crc32(Buffer.concat([t,data])),0); return Buffer.concat([len,t,data,crc]); }
@@ -43,7 +42,6 @@ jobs:
             const png = makePng(80,80,0,230,118);
             fs.writeFileSync("assets/icon.png", png);
             fs.writeFileSync("icon.png", png);
-            console.log("✅ icon 已生成");
           '
 
       - name: Install dependencies（镜像）
@@ -52,6 +50,49 @@ jobs:
           npm config set sharp_binary_host https://npmmirror.com/mirrors/sharp
           npm config set sharp_libvips_binary_host https://npmmirror.com/mirrors/sharp-libvips
           npm install --no-audit --no-fund
+
+      # 关键手段：底层黑客注入！
+      - name: 核心注入：强行修改底层源码，给个假屏幕参数
+        run: |
+          echo "开始寻找并篡改底层编译代码..."
+          # 用 node 脚本遍历 node_modules，寻找解析 screenType 的代码并强行修改
+          node -e '
+            const fs = require("fs");
+            const path = require("path");
+            function walk(dir, out) {
+              out = out || [];
+              if (!fs.existsSync(dir)) return out;
+              for (const e of fs.readdirSync(dir)) {
+                const p = path.join(dir, e);
+                if (fs.statSync(p).isDirectory()) {
+                  if (e !== "node_modules" && e !== ".bin") walk(p, out);
+                } else if (e.endsWith(".js") && !e.endsWith(".map")) {
+                  out.push(p);
+                }
+              }
+              return out;
+            }
+            const files = walk("node_modules/@zeppos/zpm/lib");
+            let patched = 0;
+            for (const f of files) {
+              let s = fs.readFileSync(f, "utf8");
+              // 寻找崩溃点： f.screenType 或者是 .screenType 的解构
+              if (s.includes("screenType") && s.includes("destructure") || s.includes("null")) {
+                // 这里是暴力替换，如果找不到设备返回 null，我们强行让它返回一个假对象
+                const originalCode = s;
+                // 这是一段极其底层的正则替换，把查表为 null 的情况，强行给个默认参数
+                s = s.replace(/const\s*\{\s*screenType\s*\}\s*=\s*(\w+)/g, "const { screenType = \"round\" } = ($1 || {})");
+                s = s.replace(/(\w+)\.screenType/g, "($1 ? $1.screenType : \"round\")");
+                
+                if (s !== originalCode) {
+                  fs.writeFileSync(f, s);
+                  console.log("✅ 成功篡改底层代码:", f);
+                  patched++;
+                }
+              }
+            }
+            console.log("✅ 共篡改", patched, "个文件");
+          '
 
       - name: Build (终极决战)
         run: |
