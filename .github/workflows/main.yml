@@ -13,63 +13,32 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: 清理幽灵文件
+      - name: 清理幽灵文件 + 注入全机型 app.json + 生成图标
         run: |
           rm -f page/app.js page/App.js
-
-      - name: 强制注入 app.json
-        run: |
           node -e '
             const fs = require("fs");
+            const names = ["gtr3","gtr4","gtr-mini","gts3","gts4","gts4-mini","t-rex2","t-rex-ultra","falcon","cheetah","cheetah-pro","balance","active","bip5"];
             const cfg = {
               app: { appId: 1134060, appType: "app", appName: "MathEngine",
                      version: { code: 1, name: "1.0.0" }, icon: "icon.png", vendor: "math-engine" },
               targets: { "2023": { module: { page: { pages: ["page/index"] } },
-                                    designWidth: 480, platforms: [{ name: "gtr4" }] } },
+                                    designWidth: 480, platforms: names.map(n => ({ name: n })) } },
               runtime: { apiVersion: { compatible: "3.0.0", target: "3.0.0", minVersion: "3.0.0" } },
               permissions: [], configVersion: "1.0.0", defaultLanguage: "zh-CN"
             };
             fs.writeFileSync("app.json", JSON.stringify(cfg, null, 2));
-            console.log("✅ app.vendor =", JSON.parse(fs.readFileSync("app.json","utf8")).app.vendor);
-          '
-
-      - name: 自动生成 80x80 图标（assets/icon.png）
-        run: |
-          node -e '
-            const fs = require("fs");
+            console.log("✅ app.json 已注入，vendor =", JSON.parse(fs.readFileSync("app.json","utf8")).app.vendor);
             const zlib = require("zlib");
-            function crc32(buf) {
-              let t = crc32.t;
-              if (!t) {
-                t = crc32.t = new Int32Array(256);
-                for (let n = 0; n < 256; n++) { let c = n; for (let k = 0; k < 8; k++) c = (c & 1) ? (0xEDB88320 ^ (c >>> 1)) : (c >>> 1); t[n] = c; }
-              }
-              let c = 0xFFFFFFFF;
-              for (let i = 0; i < buf.length; i++) c = t[(c ^ buf[i]) & 0xFF] ^ (c >>> 8);
-              return (c ^ 0xFFFFFFFF) >>> 0;
-            }
-            function chunk(type, data) {
-              const len = Buffer.alloc(4); len.writeUInt32BE(data.length, 0);
-              const t = Buffer.from(type, "ascii");
-              const crc = Buffer.alloc(4); crc.writeUInt32BE(crc32(Buffer.concat([t, data])), 0);
-              return Buffer.concat([len, t, data, crc]);
-            }
-            function makePng(w, h, r, g, b) {
-              const sig = Buffer.from([0x89,0x50,0x4E,0x47,0x0D,0x0A,0x1A,0x0A]);
-              const ihdr = Buffer.alloc(13);
-              ihdr.writeUInt32BE(w, 0); ihdr.writeUInt32BE(h, 4);
-              ihdr[8]=8; ihdr[9]=2; ihdr[10]=0; ihdr[11]=0; ihdr[12]=0;
-              const rowLen = 1 + w*3, raw = Buffer.alloc(h*rowLen);
-              for (let y=0;y<h;y++){ raw[y*rowLen]=0; for(let x=0;x<w;x++){ raw[y*rowLen+1+x*3]=r; raw[y*rowLen+2+x*3]=g; raw[y*rowLen+3+x*3]=b; } }
-              return Buffer.concat([sig, chunk("IHDR", ihdr), chunk("IDAT", zlib.deflateSync(raw)), chunk("IEND", Buffer.alloc(0))]);
-            }
+            function crc32(buf){ let t=crc32.t; if(!t){ t=crc32.t=new Int32Array(256); for(let n=0;n<256;n++){ let c=n; for(let k=0;k<8;k++) c=(c&1)?(0xEDB88320^(c>>>1)):(c>>>1); t[n]=c; } } let c=0xFFFFFFFF; for(let i=0;i<buf.length;i++) c=t[(c^buf[i])&0xFF]^(c>>>8); return (c^0xFFFFFFFF)>>>0; }
+            function chunk(type,data){ const len=Buffer.alloc(4); len.writeUInt32BE(data.length,0); const t=Buffer.from(type,"ascii"); const crc=Buffer.alloc(4); crc.writeUInt32BE(crc32(Buffer.concat([t,data])),0); return Buffer.concat([len,t,data,crc]); }
+            function makePng(w,h,r,g,b){ const sig=Buffer.from([0x89,0x50,0x4E,0x47,0x0D,0x0A,0x1A,0x0A]); const ihdr=Buffer.alloc(13); ihdr.writeUInt32BE(w,0); ihdr.writeUInt32BE(h,4); ihdr[8]=8; ihdr[9]=2; const rowLen=1+w*3, raw=Buffer.alloc(h*rowLen); for(let y=0;y<h;y++){ raw[y*rowLen]=0; for(let x=0;x<w;x++){ raw[y*rowLen+1+x*3]=r; raw[y*rowLen+2+x*3]=g; raw[y*rowLen+3+x*3]=b; } } return Buffer.concat([sig, chunk("IHDR",ihdr), chunk("IDAT", zlib.deflateSync(raw)), chunk("IEND", Buffer.alloc(0))]); }
             fs.mkdirSync("assets", { recursive: true });
-            const png = makePng(80, 80, 0, 230, 118);
+            const png = makePng(80,80,0,230,118);
             fs.writeFileSync("assets/icon.png", png);
             fs.writeFileSync("icon.png", png);
-            console.log("✅ icon 已生成:", fs.statSync("assets/icon.png").size, "字节");
+            console.log("✅ icon 已生成");
           '
-          ls -laR assets/ 2>/dev/null
 
       - name: Install dependencies（镜像）
         run: |
@@ -78,40 +47,62 @@ jobs:
           npm config set sharp_libvips_binary_host https://npmmirror.com/mirrors/sharp-libvips
           npm install --no-audit --no-fund
 
-      - name: Build + 全量取证（抓退出码，无产物必爆红）
+      - name: 第1击 grep 侦查
         run: |
-          echo "===== 1. zeus 二进制位置 ====="
-          ls -la node_modules/.bin/zeus 2>/dev/null || echo "❌ node_modules/.bin/zeus 不存在"
+          echo "===== app.json 读取位置 ====="
+          grep -rn "app\.json" node_modules/@zeppos/ --include="*.js" 2>/dev/null | grep -v "\.map$" | head -30
           echo ""
-          echo "===== 2. zeus 版本 ====="
-          ./node_modules/.bin/zeus --version 2>&1 || true
-          echo ""
-          echo "===== 3. zeus build 支持的参数 ====="
-          ./node_modules/.bin/zeus build --help 2>&1 || true
-          echo ""
-          echo "===== 4. 关键文件确认 ====="
-          ls -la app.json app.js assets/icon.png page/index.js 2>&1 || true
-          echo ""
-          echo "===== 5. 执行 build（完整输出 + 退出码）====="
-          ./node_modules/.bin/zeus build 2>&1
-          ZEUS_EXIT=$?
-          echo "ZEUS_EXIT_CODE=$ZEUS_EXIT"
-          echo ""
-          echo "===== 6. 立即找 .zab ====="
-          find . -name '*.zab' -not -path './node_modules/*' -print
-          if [ -z "$(find . -name '*.zab' -not -path './node_modules/*' -print -quit)" ]; then
-            echo "::error::zeus build 未产出 .zab（退出码 $ZEUS_EXIT），看上方取证输出"
-            exit 1
-          fi
+          echo "===== vendor 校验代码 ====="
+          grep -rn "vendor" node_modules/@zeppos/ --include="*.js" --include="*.json" 2>/dev/null | grep -v "\.map$" | head -30
 
-      - name: 归一化产物到 dist
+      - name: 第3击 patch 掉 vendor required
+        run: |
+          node -e '
+            const fs = require("fs"); const path = require("path");
+            function walk(dir, out){ out=out||[]; for(const e of fs.readdirSync(dir)){ const p=path.join(dir,e); if(fs.statSync(p).isDirectory()){ if(e!=="node_modules"&&e!==".bin") walk(p,out); } else if(e.endsWith(".js")&&!e.endsWith(".map")) out.push(p); } return out; }
+            let n=0;
+            for(const f of walk("node_modules/@zeppos")){
+              let s=fs.readFileSync(f,"utf8"); if(s.indexOf("vendor")<0) continue;
+              const next=s.replace(/required\s*:\s*\[([\s\S]*?)\]/g,(m,inner)=>{ const items=inner.split(",").map(x=>x.trim()).filter(x=>x&&x.replace(/["\x27]/g,"")!=="vendor"); return "required: ["+items.join(", ")+"]"; });
+              if(next!==s){ fs.writeFileSync(f,next); console.log("patched:",f); n++; }
+            }
+            console.log("共 patch",n,"个文件");
+          '
+
+      - name: 第2击 spy + build
+        run: |
+          cat > spy.js << 'SPYEOF'
+          const fs = require('fs');
+          const orig = fs.readFileSync;
+          fs.readFileSync = function(p) {
+            const r = orig.apply(this, arguments);
+            if (String(p).indexOf('app.json') >= 0) {
+              console.log('\n[SPY] 读取 app.json, 路径 =', p);
+              console.log('[SPY] 内容 =\n' + (r && r.toString()));
+            }
+            return r;
+          };
+          const origParse = JSON.parse;
+          JSON.parse = function(t) {
+            const r = origParse.apply(this, arguments);
+            if (r && typeof r === 'object' && r.app !== undefined) {
+              console.log('\n[SPY] app.vendor =', r.app && r.app.vendor);
+            }
+            return r;
+          };
+          console.log('[SPY] 间谍已就位');
+          SPYEOF
+          export NODE_OPTIONS="--require=$(pwd)/spy.js"
+          ./node_modules/.bin/zeus build 2>&1
+          echo "ZEUS_EXIT=$?"
+          find . -name '*.zab' -not -path './node_modules/*' -print
+          [ -z "$(find . -name '*.zab' -not -path './node_modules/*' -print -quit)" ] && { echo "::error::无 .zab"; exit 1; }
+
+      - name: 归一化 + 上传
         run: |
           mkdir -p dist
           FOUND=$(find . -name '*.zab' -not -path './node_modules/*' | head -n 1)
-          case "$FOUND" in
-            ./dist/*) echo "已在 dist" ;;
-            *) cp "$FOUND" dist/ ;;
-          esac
+          case "$FOUND" in ./dist/*) echo "已在 dist" ;; *) cp "$FOUND" dist/ ;; esac
           ls -la dist
 
       - name: Upload .zab
