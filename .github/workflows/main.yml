@@ -51,12 +51,28 @@ jobs:
           rm -rf node_modules/@zeppos/zpm
           npm install --registry https://registry.npmjs.org --no-audit --no-fund
 
-      - name: Wasm 体检 + Build
+      - name: 终极侦查与防崩补丁
         run: |
           echo "===== .wasm 文件体检 ====="
-          find node_modules/@zeppos/zpm/ -name "*.wasm" -exec wc -c {} \; 2>/dev/null || echo "❌ 无 .wasm"
-          echo ""
+          find node_modules/@zeppos/zpm/ -name "*.wasm" -exec ls -la {} \; 2>/dev/null || echo "❌ 无 .wasm"
           
+          echo "===== 应用 null-safe 补丁 ====="
+          node -e '
+            const fs = require("fs");
+            const f = "node_modules/@zeppos/zpm/lib/982.node.js";
+            let s = fs.readFileSync(f, "utf8");
+            const before = s;
+            s = s.replace(/(\{screenType:[^}]*\}=)([A-Za-z_$][\w$]*)/g, "$1($2||{})");
+            if (s !== before) {
+              fs.writeFileSync(f, s);
+              console.log("✅ 已做 null-safe 补丁");
+            } else {
+              console.log("⚠️ 没匹配到补丁位置");
+            }
+          '
+
+      - name: Build (终极缝合决战)
+        run: |
           ./node_modules/.bin/zeus build 2>&1
           echo "ZEUS_EXIT=$?"
           find . -name '*.zab' -not -path './node_modules/*' -print
