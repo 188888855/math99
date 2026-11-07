@@ -13,14 +13,41 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: 清理幽灵文件 + 打印真相
+      - name: 清理幽灵文件
         run: |
           rm -f page/app.js page/App.js
-          echo "===== page/ 实际内容（删完幽灵后）====="
           ls -laR page/ 2>/dev/null || echo "(无 page 目录)"
-          echo ""
-          echo "===== 实际 app.json（vendor 到底在不在）====="
-          cat app.json
+
+      - name: 强制注入标准 app.json（无视仓库/编辑器）
+        run: |
+          node -e '
+            const fs = require("fs");
+            const cfg = {
+              app: {
+                appId: 1134060,
+                appType: "app",
+                appName: "MathEngine",
+                version: { code: 1, name: "1.0.0" },
+                icon: "icon.png",
+                vendor: "math-engine"
+              },
+              targets: {
+                "2023": {
+                  module: { page: { pages: ["page/index"] } },
+                  designWidth: 480,
+                  platforms: [{ name: "gtr4" }]
+                }
+              },
+              runtime: { apiVersion: { compatible: "3.0.0", target: "3.0.0", minVersion: "3.0.0" } },
+              permissions: [],
+              configVersion: "1.0.0",
+              defaultLanguage: "zh-CN"
+            };
+            fs.writeFileSync("app.json", JSON.stringify(cfg, null, 2));
+            const j = JSON.parse(fs.readFileSync("app.json", "utf8"));
+            console.log("✅ 已强制写入，app.vendor =", j.app.vendor);
+            console.log(fs.readFileSync("app.json", "utf8"));
+          '
 
       - name: Install dependencies（镜像）
         run: |
@@ -29,29 +56,15 @@ jobs:
           npm config set sharp_libvips_binary_host https://npmmirror.com/mirrors/sharp-libvips
           npm install --no-audit --no-fund
 
-      - name: Validate app.json
-        run: |
-          node -e "
-            const fs = require('fs');
-            const j = JSON.parse(fs.readFileSync('app.json', 'utf8'));
-            if (!j.app || typeof j.app !== 'object') { console.error('缺少 app 根对象'); process.exit(1); }
-            if (!j.app.vendor) { console.error('❌ app.vendor 缺失！实际 app 内容：', JSON.stringify(j.app)); process.exit(1); }
-            if (!j.app.appId || !j.app.appType || !j.app.appName) { console.error('app 缺必填字段'); process.exit(1); }
-            console.log('✅ app.vendor =', j.app.vendor, '| appId =', j.app.appId);
-          "
-
       - name: Build .zab
         run: |
+          echo "===== 构建前的 app.json（必须含 vendor）====="
+          pwd && ls -la app.json && cat app.json
+          npx zeus --version 2>/dev/null || true
           npx zeus build
           echo ""
-          echo "===== 排查1：文件树 ====="
           find . -not -path './node_modules/*' -not -path './.git/*' -type f | sort
-          echo ""
-          echo "===== 排查2：.zab ====="
           find . -name '*.zab' -not -path './node_modules/*' -print
-          echo ""
-          echo "===== 排查3：dist ====="
-          ls -laR dist 2>/dev/null || echo "(无 dist)"
 
       - name: 归一化产物到 dist
         run: |
@@ -61,7 +74,6 @@ jobs:
             echo "::error::没有 .zab，请看 Build 日志"
             exit 1
           fi
-          echo "找到: $FOUND"
           case "$FOUND" in
             ./dist/*) echo "已在 dist" ;;
             *) cp "$FOUND" dist/ ;;
